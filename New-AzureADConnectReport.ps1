@@ -80,7 +80,7 @@ Else
 #Determine Registry path info
 Write-Host "Fetching registry information" -ForegroundColor Cyan
 $regPathSuccess = 0
-$regPaths = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\MicrosoftAzureADConnectionTool", "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{337E88B3-6961-420C-BF5D-FA1FDF73AA7C}"
+$regPaths = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\MicrosoftAzureADConnectionTool", "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{337E88B3-6961-420C-BF5D-FA1FDF73AA7C}", "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{69E51737-DAAC-40E0-BBD6-816345D62A5A}"
 $regPaths | %{
 	if ((Test-Path $_) -eq $true)
 	{
