@@ -26,15 +26,20 @@ Param
 	$filePath
 )
 
+#Define Variables
+$SQLServer = $env:computername #Current version of the script only supports LocalDB instance. External SQL to follow in future release.
+
 #Define Functions
-Function check-even ($num)
+Function Check-Even($num)
 {
-	
 	[bool]!($num % 2)
 } #from http://blogs.technet.com/b/heyscriptingguy/archive/2006/10/19/how-can-i-tell-whether-a-number-is-even-or-odd.aspx
 
-#Console Prep
-Write-Host "Please wait..." -F Yellow
+function Exit-Script($msg)
+{
+	Write-Warning $msg
+	Exit
+}
 
 #Check Prerequisites
 If (-not (Get-Module SQLPS))
@@ -48,51 +53,88 @@ Else
 	Import-Module SQLPS
 }
 
-#Check for SQL Module
-if ((gmo sqlps) -eq $null)
-{
-	write-host "The SQL PowerShell Module Is Not loaded.  Please install and try again" -F Red
-	write-host "http://technet.microsoft.com/en-us/library/hh231683.aspx" -F Red
-	Write-Host "Quitting..." -F Red; sleep 5; Break
+
+#Determine Registry path info
+$regPaths = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\MicrosoftAzureADConnectionTool", "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{337E88B3-6961-420C-BF5D-FA1FDF73AA7C}"
+$regPaths | %{
+	if ((Test-Path $_) -eq $true)
+	{
+		Try
+		{
+			$dirsyncVersion = (Get-ItemProperty $_ -ErrorAction STOP).DisplayVersion
+		}
+		Catch
+		{
+			Exit-Script "Could not fetch registry information. Aborting script."
+		}
+	}
+	else
+	{
+		Exit-Script "Could not fetch registry information. Aborting script."
+	}
 }
 
-#Get Dirsync Registry Info
-Try
-{
-	$DirsyncVersion = (gp 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\MicrosoftAzureADConnectionTool' -ErrorAction STOP).DisplayVersion
-}
-Catch
+if (Test-Path "HKLM:\SOFTWARE\Microsoft\MSOLCoExistence\CurrentVersion")
 {
 	Try
 	{
-		$DirsyncVersion = (gp 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{337E88B3-6961-420C-BF5D-FA1FDF73AA7C}').DisplayVersion
+		$DirsyncPath = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\MSOLCoExistence\CurrentVersion" -ErrorAction Stop).InstallationPath
 	}
 	Catch
 	{
-		Write-Warning "Could not determine DirSync Version"
+		Exit-Script "Could not determine Azure AD Sync Installation path. Aborting script."
 	}
 }
-
-$DirsyncPath = (gp 'HKLM:\SOFTWARE\Microsoft\MSOLCoExistence\CurrentVersion').InstallationPath
-
-#AAD Sync does not support external SQL yet, hence static SQL config from localDB
-$SQLServer = $env:computername
-
-$SQLInstance = (gp 'HKLM:\SYSTEM\CurrentControlSet\services\ADSync\Parameters').SQLInstance
-$ADSyncInstance = (gp 'HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server Local DB\Shared Instances\ADSync').InstanceName
-
-$MSOLInstance = ("np:\\.\pipe\" + $ADSyncInstance + "\tsql\query")
-$SQLVersion = Invoke-Sqlcmd -ServerInstance $MSOLInstance -Query "SELECT SERVERPROPERTY('productversion'), SERVERPROPERTY ('productlevel'), SERVERPROPERTY ('edition')"
-
-#Get AD Management Agents
-$ADMAxml = Invoke-Sqlcmd -ServerInstance $MSOLInstance -Query "SELECT [ma_id] ,[ma_name] ,[private_configuration_xml],[ma_type] FROM [ADSync].[dbo].[mms_management_agent]" | ? { $_.ma_type -eq 'AD' }
-$individualADMAgent = @()
-$MaName = @()
-foreach ($ADMAgent in $ADMAxml)
+Else
 {
-	[xml]($ADMAgent | select -Expand private_configuration_xml)
-	$individualADMAgent += [xml]($ADMAgent | select -Expand private_configuration_xml)
-	$maName += ($ADMAgent | select ma_name)
+	Exit-Script "Could not determine Azure AD Sync Installation path. Aborting script."
+}
+
+#Get SQL information
+if (Test-Path "HKLM:\SYSTEM\CurrentControlSet\services\ADSync\Parameters")
+{
+	Try
+	{
+		$SQLInstance = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\services\ADSync\Parameters' -ErrorAction Stop).SQLInstance
+		if (Test-Path "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server Local DB\Shared Instances\ADSync")
+		{
+			$ADSyncInstance = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server Local DB\Shared Instances\ADSync' -ErrorAction Stop).InstanceName
+			$MSOLInstance = ("np:\\.\pipe\" + $ADSyncInstance + "\tsql\query")
+			$SQLVersion = Invoke-Sqlcmd -ServerInstance $MSOLInstance -Query "SELECT SERVERPROPERTY('productversion'), SERVERPROPERTY ('productlevel'), SERVERPROPERTY ('edition')" -ErrorAction Stop
+		}
+		Else
+		{
+			Exit-Script "Could not fetch DB information. Aborting script."
+		}
+
+	}
+	Catch
+	{
+		Exit-Script "Could not fetch DB information. Aborting script."
+	}
+}
+else
+{
+	Exit-Script "Could not fetch DB information. Aborting script."
+}
+
+#Get AD Management Agent information
+Try
+{
+	$ADMAxml = Invoke-Sqlcmd -ServerInstance $MSOLInstance -Query "SELECT [ma_id] ,[ma_name] ,[private_configuration_xml],[ma_type] FROM [ADSync].[dbo].[mms_management_agent]" | ? { $_.ma_type -eq 'AD' } -ErrorAction Stop
+	$individualADMAgent = @()
+	$MaName = @()
+	
+	foreach ($ADMAgent in $ADMAxml) #fetching MA information from SQL DB
+	{
+		[xml]($ADMAgent | select -Expand private_configuration_xml)
+		$individualADMAgent += [xml]($ADMAgent | select -Expand private_configuration_xml)
+		$maName += ($ADMAgent | select ma_name)
+	}
+}
+Catch
+{
+	Exit-Script "Could not fetch Management Agent information. Aborting script."
 }
 
 #Get DirSync Database Info
