@@ -1,4 +1,4 @@
-﻿<#	
+<#	
 	.NOTES
 	===========================================================================
 	 Created with: 	SAPIEN Technologies, Inc., PowerShell Studio 2016 v5.2.128
@@ -80,7 +80,12 @@ Else
 #Determine Registry path info
 Write-Host "Fetching registry information" -ForegroundColor Cyan
 $regPathSuccess = 0
-$regPaths = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\MicrosoftAzureADConnectionTool", "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{337E88B3-6961-420C-BF5D-FA1FDF73AA7C}", "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{69E51737-DAAC-40E0-BBD6-816345D62A5A}"
+#Registry path for AAD Connect changes with newer versions, so this $regpaths array will need to be updated sometimes
+$regPaths = @("HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\MicrosoftAzureADConnectionTool",
+                "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{337E88B3-6961-420C-BF5D-FA1FDF73AA7C}",
+                "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{69E51737-DAAC-40E0-BBD6-816345D62A5A}",
+                "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{1D8D16FF-96F1-48AA-8971-C7D4BD1D66F1}"
+                )
 $regPaths | %{
 	if ((Test-Path $_) -eq $true)
 	{
