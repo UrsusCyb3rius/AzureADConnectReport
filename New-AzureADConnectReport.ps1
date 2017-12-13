@@ -65,7 +65,7 @@ Function Exit-Script($msg)
 
 #Check Prerequisites
 Write-Host "Checking script prerequisites" -ForegroundColor Cyan
-If (-not (Get-Module SQLPS))
+If (-not (Get-Module SQLPS -ListAvailable))
 {
 	Write-Warning "Could not locate SQL PowerShell Module. Please visit https://msdn.microsoft.com/en-us/library/hh245198.aspx for more information."
 	exit
